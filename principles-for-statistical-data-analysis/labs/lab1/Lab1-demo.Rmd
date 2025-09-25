@@ -19,9 +19,7 @@ We will explore the data which everyone provided via the Shiny app. Before we ca
 
 ```{r}
 drive_auth(cache = FALSE)
-sheet_id <- paste("https://docs.google.com/spreadsheets/d/",
-                  "1KOb_GbNNC2zpteGwWeAcySiIeUu3Rd5wjq873WzO65o",
-                  "/", sep = "")
+sheet_id <- paste("YOUR_GOOGLE_LINK", sep = "")
 drive_download(sheet_id, type = "csv")
 ```
 
