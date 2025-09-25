@@ -496,6 +496,15 @@ with(dat,
      )
 ```
 
+```{r}
+# When missing values are included, no calculation
+with(dat, 
+     c(mean = mean(`Distance to class`),
+       var = var(`Distance to class`),
+       sd = sd(`Distance to class`))
+     )
+```
+
 The tidyverse counterpart of this is to work with the `summarise()` function (of the **dplyr** subpackage):
 
 ```{r, paged.print = FALSE}
