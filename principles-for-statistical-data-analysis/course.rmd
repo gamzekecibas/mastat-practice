@@ -1,0 +1,15 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+cutpts=c(1500, 2000, 2500, 3000, 3500, 10000)
+prop.nonsmoke = pnorm(cutpts, mean = 3516, sd=496)
+prop.smoke = pnorm( cutpts, mean = 3260, sd=516)
+pcat.nonsmoke = c(prop.nonsmoke[1], diff(prop.nonsmoke))
+pcat.smoke= c(prop.smoke[1], diff(prop.smoke))
+risk.nonsmoke = c(792, 406, 78, 11.6, 2.2, 3.8)
+risk.smoke= c(565, 346, 27, 6.1, 4.5, 2.6)
+
+If logs are symmetrical: it yields the median on the original
+scale (via the median of the logs). Q: Verify

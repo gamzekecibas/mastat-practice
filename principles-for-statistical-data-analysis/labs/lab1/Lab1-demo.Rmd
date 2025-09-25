@@ -1,0 +1,1290 @@
+---
+title: "PrinStat - Lab 1: Initial Data Analysis"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This [R Markdown Notebook](https://bookdown.org/yihui/rmarkdown/notebook.html) can best be viewed by clicking the button *Visual* above (instead of *Source*). The R code in each code chunk below can be executed by clicking the *Run* button (or with the short-cut *Ctrl-Shift-Enter*). Single lines of code can be executed by selecting the option *Run Selected Line(s)* from the drop-down menu in *Run* (or with the short-cut *Ctrl-Enter*). The results of each computation will appear below the code chunks.
+
+As is customary, we first load the necessary packages for this Notebook:
+
+```{r init}
+library(car)
+library(googledrive)
+library(tidyverse)
+```
+
+We will explore the data which everyone provided via the Shiny app. Before we can read the data, however, we first have to download them from *GoogleDrive*, where the Shiny app has stored them. We can do this with the following functions from the **googledrive** package (which may again prompt you for access):
+
+```{r}
+drive_auth(cache = FALSE)
+sheet_id <- paste("https://docs.google.com/spreadsheets/d/",
+                  "1KOb_GbNNC2zpteGwWeAcySiIeUu3Rd5wjq873WzO65o",
+                  "/", sep = "")
+drive_download(sheet_id, type = "csv")
+```
+
+A CSV file called *PrinStat Student Survey.csv* (or perhaps *PrinStat Student Survey - Responses.csv*) has now been saved in your working directory, which is probably the folder where you put this R Notebook.
+
+## Read data
+
+You can read the data into R with the following command and select the file. It may be the case that you need to change the argument `sep = ","` (manually) into `sep = ";"` (and if you get a warning about an incomplete final line, then you can ignore it, since this is an old bug in R):
+
+```{r}
+dat <- read.csv(file.choose(), header = TRUE, sep = ",")    # or: sep = ";"
+```
+
+If you're not sure what `read.csv()` does, then consult the help pages by typing:
+
+```{r}
+?read.csv
+```
+
+or:
+
+```{r}
+?read.table
+```
+
+Since about 2015 many people use the [tidyverse](https://www.tidyverse.org/) suite/family of packages to handle data. The tidyverse's functions for reading data (part of the subpackage **readr**) closely resemble base R's functions but they have an underscore (`_`) in their name instead of a dot (`.`):
+
+```{r}
+dat <- read_csv(file.choose(), col_names = TRUE, na = character())
+```
+
+The file formats which the **readr** package can handle are the same as base R's functions. Excel files can be read in directly by means of the **readxl** or **xlsx** package. Data files of statistical software such as *SAS*, *Stata*, *SPSS* etc. can be read using the packages **foreign** and/or **haven**.
+
+An alternative option to selecting a file with the `file.choose()` function is to use a relative (rather than an absolute) path: First change your working directory in R to the directory where the data file is stored, using `setwd()` or:
+
+-   in R (windows): *File - Change dir...* (make sure you have the console selected)
+-   in R (mac): *Misc - Change Working Directory...*
+-   in RStudio: *Session - Set Working Directory - Choose Directory...*
+
+If your data is in the same directory as this Notebook then changing the working directory to that directory is even simpler in Rstudio: *Session - Set Working Directory - To Source File Location*.
+
+If you have changed the working directory to the directory containing the data file, then you can just run the command with the file name, e.g.:
+
+```         
+# Not run:
+dat <- read.table("PrinStat Student Survey.csv", header = TRUE,
+                  sep = ",")
+```
+
+Some functions for a first exploration:
+
+```{r}
+head(dat)
+```
+
+```{r}
+tail(dat)
+```
+
+```{r}
+names(dat)
+```
+
+```{r}
+dim(dat)
+```
+
+```{r}
+str(dat)
+```
+
+RMarkdown documents such as this R Notebook by default print data frames in an elegant way, easy to inspect by a user. Compare the ordinary way in which R output would appear in the console:
+
+```{r, paged.print = FALSE}
+head(dat)
+```
+
+```{r, paged.print = FALSE}
+tail(dat)
+```
+
+Or, Variables/Columns in data sets can be accessed using the dollar sign operator (`$`):
+
+```{r}
+Gender    # Error
+```
+
+```{r}
+dat$Gender
+```
+
+**Avoid** using `attach()`: you'll eventually get into trouble!
+
+```         
+# Not run:
+attach(dat)
+Gender
+detach(dat)
+Gender    # Error
+```
+
+Instead, it is good practice to use function `with()` if you want to avoid the dollar sign operator. This function has the same meaning as tidyverse's "pipe operator" (`%>%`) in a "pipe chain":
+
+```{r}
+with(dat, Gender)
+```
+
+```{r}
+dat %>% pull(Gender)
+```
+
+In tidyverse, the function `select()` (of the subpackage **dplyr**) creates a new data frame (called "tibble") with the selected column:
+
+```{r, paged.print = FALSE}
+dat %>% select(Gender)
+```
+
+## Univariate descriptives
+
+### Categorical variables
+
+```{r}
+with(dat, str(Gender))
+```
+
+Let's see how many men/women/... are in this lab:
+
+```{r}
+with(dat, table(Gender))
+```
+
+```{r, paged.print = FALSE}
+dat %>% count(Gender)
+```
+
+To explicitly let R know that level `""` is in fact a **missing value**, we need to recode `Gender` by assigning the new value `NA` to observations with `Gender == ""` (another option is to use `ifelse()` - see below).
+
+```{r}
+with(dat, is.na(Gender))
+```
+
+```{r}
+?`[`
+```
+
+```{r}
+with(dat, Gender[1])
+```
+
+```{r}
+with(dat, Gender[dat$Gender == "female"])
+```
+
+However, R does not consider `Gender` to be a factor (with either two or three levels):
+
+```{r}
+with(dat, levels(Gender))
+```
+
+By recoding it as a factor, the empty level `""` becomes a third level. Such transforming of a variable can be done with tidyverse's function `mutate()` (from the subpackage **dplyr**) or with R's base function `within()` (but **not** with the deprecated function `transform()`):
+
+```{r}
+dat <- within(dat, Gender <- factor(Gender))
+with(dat, levels(Gender))
+```
+
+The empty level can be excluded from the computations:
+
+```{r}
+with(dat, table(Gender, exclude = NULL))    # show missing values
+```
+
+```{r}
+with(dat, table(Gender, exclude = ""))    # without missing values
+```
+
+By replacing empty levels with `NA`, they are only dropped by coding the transformed variable again as a factor. However, don't forget to include them in your computations if you want to report missing values:
+
+```{r}
+dat <- within(dat, Gender <- factor(na_if(Gender, "")))
+with(dat, is.na(Gender))
+```
+
+```{r}
+with(dat, table(Gender, exclude = NULL))
+```
+
+Now, everything in percentages, using the function `prop.table()`:
+
+```{r}
+with(dat, prop.table(table(Gender, exclude = NULL)))
+```
+
+```{r}
+tab <- with(dat, table(Gender, exclude = NULL))
+tab
+```
+
+```{r}
+prop.table(tab)
+```
+
+The proper graph for a categorical variable is a **bar chart**:
+
+```{r}
+with(dat, plot(Gender, ylab = "Absolute Frequency", xlab = "Gender",
+               main = "Barplot of Gender"))
+```
+
+Since `Gender` is coded as a factor, using the general function `plot()` will automatically display an appropriate graph for categorical variables.
+
+However, you see that `plot()` automatically excludes missing values. To also display these you can use the function `barplot()` with the appropriate levels specified to the argument `names.arg`:
+
+```{r}
+barplot(tab, ylab = "Absolute Frequency",
+        names.arg = c("female", "male", "NA"), xlab = "Gender")
+```
+
+The order of the levels specified to `names.arg` is important. Indeed, know what you are doing:
+
+```{r}
+barplot(prop.table(tab), ylab = "Percentage")    # Uninformative
+```
+
+```{r}
+barplot(prop.table(tab), ylab = "Percentage",
+        names.arg = c("X", "female", "male", "NA"), xlab = "Gender")    # Error
+```
+
+```{r}
+barplot(tab / length(dat$Gender), ylab = "Percentage",
+        names.arg = c("female", "male", "NA"), xlab = "Gender")
+```
+
+Of course, bar charts can also be made with tidyverse's subpackage **ggplot2**. A difficulty is that its plots cannot be included in a pipe chain (with `%>%`). Instead, they use their own `+` operator to add various "layers" to a plot:
+
+```{r}
+plt_Gender <- ggplot(data = dat, mapping = aes(x = Gender)) +
+  geom_bar(fill = "skyblue")
+plt_Gender
+```
+
+A(nother) quirk of **ggplot2** is that there is no straightforward way to create bar charts with relative frequencies:
+
+```{r}
+ggplot(data = dat, mapping = aes(x = Gender)) +
+  geom_bar(fill = "skyblue", mapping = aes(y = after_stat(prop), group = 1)) +
+  labs(y = "percent")
+```
+
+Note the typical terminology in **ggplot2** (which refers to [Grammar of Graphics](https://link.springer.com/book/10.1007/0-387-28695-0)):
+
+-   An *aesthetic* specifies how a certain variable/column of a data frame is represented in the graph. Such a representation is called a mapping and it is specified with the argument `mapping` using the function `aes()`. For instance, the variable `Gender` is represented on the horizontal axis by mapping it to the `x` aesthetic.
+-   A *geom* or *geom layer* specifies the (geometrical) shape in which the individual data values are represented. For instance, the frequencies of the levels of a categorical variable (such as `Gender`) can be represented in a bar geom, specified by the layer function `geom_bar()`.
+
+Next to geom layers, there are (among others) also *stat layers* which apply statistical transformations to the data values before visualizing them. For instance, the level frequencies in a categorical variable first need to be counted in order to visualize them in bars. That is why a bar geom by default also uses a stat layer `stat_count()`. Every geom layer has a default stat layer and vice versa, which you can override yourself. See the details in the help pages of the **gglot2** package.
+
+We investigate some other categorical variables (or "factors"):
+
+```{r}
+with(dat, Nationality)
+```
+
+```{r}
+dat <- within(dat, Nationality <- na_if(Nationality, ""))
+with(dat, Nationality)
+```
+
+Recode `Nationality` into binary variable called `Belgian` indicating Belgian vs. Other nationality:
+
+```{r}
+dat <- within(dat,
+              Belgian <- ifelse(Nationality == "Belgium", "BEL", "Other")
+              )
+with(dat, Belgian)
+```
+
+```{r}
+with(dat, str(Belgian))
+```
+
+Also recode it to a factor:
+
+```{r}
+dat <- within(dat, Belgian <- factor(Belgian))
+with(dat, Belgian)
+```
+
+```{r}
+tab <- with(dat, table(Belgian, exclude = NULL))
+prop.table(tab)
+```
+
+```{r}
+with(dat, plot(Belgian, xlab = "Nationality", ylab = "Absolute Frequency"))
+```
+
+```{r}
+barplot(tab, xlab = "Nationality", ylab = "Absolute Frequency",
+        names.arg = c("Belgian", "Other", "NA"))
+```
+
+```{r}
+barplot(prop.table(tab), xlab = "Nationality", ylab = "Relative Frequency",
+        names.arg = c("Belgian", "Other", "NA"))
+```
+
+```{r}
+ggplot(data = dat, mapping = aes(x = Belgian)) + geom_bar(fill = "wheat")
+```
+
+Although R has the function `pie()`, it is recommended to **not** use pie charts if the number of levels is large, and perhaps you should avoid pie charts altogether from three levels onwards. See <http://en.wikipedia.org/wiki/Pie_chart>, especially the section *Use and effectiveness*.
+
+```{r}
+with(dat, `Academic background`)
+```
+
+```{r}
+dat <- within(dat,
+              Academic_background <- factor(na_if(`Academic background`, "")))
+with(dat, table(Academic_background, exclude = NULL))
+```
+
+```{r}
+tab <- with(dat, table(Academic_background, exclude = NULL))
+tab
+```
+
+```{r}
+prop.table(tab)
+```
+
+```{r}
+with(dat, plot(Academic_background))
+```
+
+```{r}
+barplot(tab)    # also plots missing values
+```
+
+R does not depict all levels because there are so many. A solution is a horizontal bar chart but then we have ensure that the figure margin is wide enough so the levels are readable. We can change the figure margins with the function `par()`:
+
+```{r}
+?par
+```
+
+```{r}
+par(mar = c(5, 12, 4, 2) + 0.1)
+barplot(tab, horiz = TRUE, las = 1, cex.names = 0.6)
+```
+
+```{r}
+par(mar = c(5, 4, 4, 2) + 0.1)    # Change graphical parameters back to default
+```
+
+In **ggplot2** we can create a horizontal bar chart by specifying the factor (`Academic_background`) to `y` aesthetic (instead of `x`):
+
+```{r}
+ggplot(data = dat, mapping = aes(y = Academic_background)) +
+  geom_bar(fill = "blue")
+```
+
+```{r}
+with(dat, `R course`)
+```
+
+```{r}
+dat <- within(dat, R_course <- factor(na_if(`R course`, "")))
+with(dat, str(R_course))
+```
+
+```{r}
+with(dat, plot(R_course))
+```
+
+```{r}
+with(dat, `R skills`)
+```
+
+```{r}
+dat <- within(dat, R_skills <- na_if(`R skills`, ""))
+with(dat, str(R_skills))
+```
+
+We can convert `R.skills` into an ordinal variable by using the argument `ordered` in `factor()`:
+
+```{r}
+dat <- within(dat, R_skills <- factor(R_skills, ordered = TRUE, 
+                       levels = c("None", "Low", "Intermediate", "Advanced")))
+with(dat, str(R_skills))
+```
+
+```{r}
+with(dat, plot(R_skills))
+```
+
+```{r}
+with(dat, `Means of transportation`)
+```
+
+```{r}
+dat <- within(dat,
+              Means_of_transportation <- na_if(`Means of transportation`, ""))
+```
+
+Change labels to make them shorter (but again specify them in the same order as the current order, because otherwise you also need to use the argument `levels`):
+
+```{r}
+dat <- within(dat,
+              Means_of_transportation <- factor(Means_of_transportation, 
+                                                labels = c("bike",
+                                                           "car / motorbike",
+                                                           "public transport")))
+with(dat, plot(Means_of_transportation))
+```
+
+### Numeric/Continuous variables
+
+```{r}
+with(dat, `Distance to class`)
+```
+
+```{r}
+with(dat, str(`Distance to class`))
+```
+
+How many missing values?
+
+```{r}
+with(dat, sum(is.na(`Distance to class`)))
+```
+
+In tidyverse, the function `arrange()` (of the subpackage **dplyr**) can be used to order a data frame on the basis of the values in particular columns. The default is ascending order (i.e. from the smallest to the largest value) but the function `desc()` can be used to sort in descending order (i.e. from the largest to the smallest value):
+
+```{r}
+dat %>% arrange(`Distance to class`)
+```
+
+```{r}
+dat %>% arrange(desc(`Distance to class`))
+```
+
+```{r}
+dat %>% arrange(desc(`Time to get here`))
+```
+
+R of course has many functions for computing **numerical summaries** (i.e. descriptive statistics). By default, however, they return `NA` if there are any `NA`'s in your data. If you want to have the numerical summary for the non-missing data, then each of these functions has to be used with the argument `na.rm = TRUE`:
+
+```{r}
+with(dat, min(`Distance to class`))
+```
+
+```{r}
+with(dat, min(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+with(dat, max(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+with(dat, range(`Distance to class`, na.rm = TRUE))
+```
+
+Various summary statistics can be combined in a vector:
+
+```{r}
+with(dat, 
+     c(mean = mean(`Distance to class`, na.rm = TRUE),
+       var = var(`Distance to class`, na.rm = TRUE),
+       sd = sd(`Distance to class`, na.rm = TRUE))
+     )
+```
+
+The tidyverse counterpart of this is to work with the `summarise()` function (of the **dplyr** subpackage):
+
+```{r, paged.print = FALSE}
+dat %>% summarise(
+  mean = mean(`Distance to class`, na.rm = TRUE),
+  var = var(`Distance to class`, na.rm = TRUE),
+  sd = sd(`Distance to class`, na.rm = TRUE))
+```
+
+Some robust summaries:
+
+```{r}
+with(dat, median(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+with(dat, quantile(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+with(dat, quantile(`Distance to class`, probs = (1:10) / 10, na.rm = TRUE))
+```
+
+```{r}
+with(dat, summary(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+with(dat, fivenum(`Distance to class`, na.rm = TRUE))
+```
+
+Check:
+
+```{r}
+with(dat, IQR(`Distance to class`, na.rm = TRUE))
+```
+
+```{r}
+# ==
+unname(with(dat,
+     quantile(`Distance to class`, 0.75, na.rm = TRUE) - 
+     quantile(`Distance to class`, 0.25, na.rm = TRUE)))
+```
+
+**Graphical summaries** are provided by the histogram, boxplot or QQ-plot.
+
+**Histogram**:
+
+```{r}
+with(dat, hist(`Distance to class`))
+```
+
+```{r}
+with(dat, hist(`Distance to class`, freq = FALSE))
+```
+
+```{r}
+?hist
+```
+
+Identify the outliers (e.g. `` `Distance to class` `` == 10000):
+
+```{r}
+?which
+```
+
+```{r}
+with(dat, which(`Distance to class` > 7000))
+```
+
+```{r}
+with(dat, `Distance to class`[1])
+```
+
+```{r}
+with(dat, match(10000, `Distance to class`))
+```
+
+```{r}
+with(dat, which(`Distance to class` == 10000))
+```
+
+We can subset the data by excluding an observation (e.g. obs 1):
+
+```{r}
+with(dat, hist(`Distance to class`[-1], freq = FALSE))
+```
+
+```{r}
+with(dat, {
+  hist(`Distance to class`[-1], freq = FALSE, breaks = 20)
+  lines(density(`Distance to class`[-1], na.rm = TRUE))
+        })
+```
+
+The tidyverse counterpart to excluding observations is to use the function `filter()` (from the subpackage **dplyr**). Since we cannot include base R functions (like `hist()`) in pipe chains (using `%>%`), we have to create a new data set:
+
+```{r}
+sub <- dat %>% filter(`Distance to class` < 10000)
+with(sub, hist(`Distance to class`, freq = FALSE))
+```
+
+```{r}
+with(sub, {
+  hist(`Distance to class`, freq = FALSE, breaks = 20)
+  lines(density(`Distance to class`, na.rm = TRUE))
+        })
+```
+
+Further on, if we use the variable `` `Distance to class` `` then we will remove the outlier(s) from the data. You could use the new data set `sub` but then you lose all the other information about this (first) observation. This is not always what we want because outliers may have valid information on all of the other variables.
+
+**Boxplot**:
+
+```{r}
+with(dat, boxplot(`Distance to class`, ylab = "Distance to class", 
+                  main = "boxplot of Distance"))
+```
+
+```{r}
+with(sub, boxplot(`Distance to class`, horizontal = TRUE))
+```
+
+```{r}
+with(sub, boxplot(`Distance to class`, horizontal = TRUE, outline = FALSE))
+```
+
+```{r}
+?boxplot
+```
+
+The function `Boxplot()` from the package **car** is more informative than the base R function in that it plots the row ID's of the outliers:
+
+```{r}
+with(dat, Boxplot(`Distance to class`, ylab = "Distance to class", 
+                  main = "boxplot of Distance"))
+```
+
+```{r}
+with(sub, Boxplot(`Distance to class`, ylab = "Distance to class", 
+                  main = "boxplot of Distance"))
+```
+
+**QQ-plot**: = Check for normality (relevant for various statistical tests, e.g. t-test)
+
+With outliers:
+
+```{r}
+with(dat, {
+  qqnorm(`Distance to class`)
+  qqline(`Distance to class`)
+})
+```
+
+Without outliers:
+
+```{r}
+with(sub, {
+  qqnorm(`Distance to class`)
+  qqline(`Distance to class`)
+})
+```
+
+A histogram and boxplot side by side:
+
+```{r}
+?par
+```
+
+```{r}
+par(mfrow = c(1, 2))    # split the screen into 1 row and 2 columns
+with(sub, {
+  hist(`Distance to class`, xlab = "Distance to class", main = "")
+  boxplot(`Distance to class`)
+})
+```
+
+```{r}
+par(mfrow = c(1, 1))    # put back to default
+```
+
+Add the QQ-plot:
+
+```{r}
+?layout
+```
+
+```{r}
+layout(matrix(c(1, 1, 2, 3), nrow = 2, ncol = 2, byrow = TRUE))
+with(sub, {
+  qqnorm(`Distance to class`)
+  qqline(`Distance to class`)
+  hist(`Distance to class`, xlab = "Distance to class", main = "")
+  boxplot(`Distance to class`)
+})
+```
+
+In tidyverse, histograms, boxplots and qq-plots can be made by choosing the appropriate "geom layers" with **ggplot2**. Note that the QQ-plot requires the numeric variable to be specified to the aesthetic `sample`:
+
+```{r}
+ggplot(data = sub, mapping = aes(x = `Distance to class`)) + geom_histogram()
+```
+
+```{r}
+ggplot(data = sub, mapping = aes(x = `Distance to class`)) + geom_boxplot()
+```
+
+```{r}
+ggplot(data = sub, mapping = aes(sample = `Distance to class`)) +
+  geom_qq() +
+  geom_qq_line()
+```
+
+These three graph types also illustrate the default connections between geom and stat layers in **ggplot2**. For instance, a histogram divides a numeric variable into bins, counts the number of observations within each bin and visualizes these bin counts as bars. That is why a histogram can also be seen as a *bar geom* with a *bin stat*, which can be made in two ways:
+
+```{r}
+ggplot(data = sub, mapping = aes(x = `Distance to class`)) + 
+  geom_bar(stat = "bin")
+```
+
+```{r}
+ggplot(data = sub, mapping = aes(x = `Distance to class`)) + 
+  stat_bin(geom = "bar")
+```
+
+Another numeric variable:
+
+```{r}
+with(dat, str(`Time to get here`))
+```
+
+```{r}
+with(dat, `Time to get here`)
+```
+
+```{r}
+with(dat, is.na(`Time to get here`))    # Are there any NAs?
+```
+
+```{r}
+with(dat, sum(is.na(`Time to get here`)))    # How many?
+```
+
+```{r}
+with(dat, table(is.na(`Time to get here`)))  # Idem
+```
+
+```{r}
+with(dat, which(is.na(`Time to get here`)))    # How do we know which obs are NAs?
+```
+
+```{r}
+par(mfrow = c(1, 2))
+with(dat, {
+  hist(`Time to get here`, main = "", xlab = "Time to get here")
+  boxplot(`Time to get here`)
+})    # may also be heavily right-skewed
+```
+
+```{r}
+par(mfrow = c(1, 1))    # back to default
+```
+
+```{r}
+ggplot(data = dat, mapping = aes(x = `Time to get here`)) + geom_histogram()
+```
+
+```{r}
+ggplot(data = dat, mapping = aes(x = `Time to get here`)) + geom_boxplot()
+```
+
+Date-Time variables are character variables with special attributes in R:
+
+```{r}
+with(dat, str(`Date of Birth`))
+```
+
+```{r}
+with(dat, `Date of Birth`)
+```
+
+They can be converted to date objects, i.e. objects with class `Date`:
+
+```{r}
+?as.Date    # You may have to change the format argument:
+```
+
+You may have to change the `format` string in the following code (e.g. `"%m/%d/%Y"` or `"%Y-%m-%d"`) instead of `"%d/%m/%Y"`):
+
+```{r}
+dat <- within(dat, Birth_date <- as.Date(`Date of Birth`,
+                                 format = "%d/%m/%Y")
+             )  # Change the format argument if the following produces only NA's:
+with(dat, Birth_date)
+```
+
+```{r}
+with(dat, str(Birth_date))
+```
+
+```{r}
+with(dat, is.na(Birth_date))
+```
+
+```{r}
+with(dat, table(is.na(Birth_date)))
+```
+
+The bins of R's base function `hist()` can even be specified on the basis of date attributes:
+
+```{r}
+with(dat, hist(Birth_date, breaks = "years"))
+```
+
+```{r}
+with(dat, hist(Birth_date, breaks = "weeks"))    # bins too thin!
+```
+
+```{r}
+with(dat, hist(Birth_date, breaks = 20))
+```
+
+```{r}
+with(dat, boxplot(Birth_date))
+```
+
+Date objects can be formatted with the function `format()`:
+
+```{r}
+?format
+```
+
+```{r}
+with(dat, format(Birth_date, "%Y"))
+```
+
+```{r}
+with(dat, Birth_date[format(Birth_date, "%Y") > 2010])
+```
+
+People born after 2010 would be **anomalies** in the *MaStat*, so are there any? If so, then you can identify them with the function `which()`:
+
+```{r}
+ind <- with(dat, which(format(Birth_date, "%Y") > 2010))
+ind  # If there are none, then perhaps use: ind <- 1
+```
+
+Next, use `ind` to subset the data and/or use `-ind` to exclude them from the data:
+
+```{r}
+with(dat, Birth_date[-ind]) 
+```
+
+```{r}
+with(dat, hist(Birth_date[-ind], breaks = "years"))
+```
+
+Again, the tidyverse code would be to "filter" the birth dates:
+
+```{r}
+sub <- dat %>% filter(format(Birth_date, "%Y") <= 2010)
+with(sub, hist(Birth_date, breaks = "years"))
+```
+
+Dates are essentially stored as integer values in R and this can be shown by the fact that the one can be converted to the other and vice versa:
+
+```{r}
+with(dat, as.integer(Birth_date))
+```
+
+```{r}
+?as.Date
+```
+
+```{r}
+as.Date(4767, origin = "1970-01-01")    # default origin in R
+```
+
+```{r}
+as.Date(4767, origin = "1971-01-01")
+```
+
+R's base function for returning the current date, i.e. today:
+
+```{r}
+Sys.Date()
+```
+
+```{r}
+?Sys.Date
+```
+
+```{r}
+as.integer(Sys.Date())
+```
+
+On the basis of this we can compute/derive a continuous age variable:
+
+```{r}
+dat <- within(dat,
+              Age <- (as.integer(Sys.Date()) - as.integer(Birth_date)) / 365.25
+              )
+with(dat, Age)
+```
+
+The tidyverse code would be to "mutate" `Birth_date` into `Age`:
+
+```{r}
+dat <- dat %>%
+  mutate(Age = (as.integer(Sys.Date()) - as.integer(Birth_date)) / 365.25)
+with(dat, Age)
+```
+
+Finally, let's make a histogram for `Age`. Of course, it is identical to the histogram of `Birth_date` but mirrored vertically (since `Age` is a linear transformation of `Birth_date`):
+
+```{r}
+sub <- dat %>% filter(format(Birth_date, "%Y") <= 2010)
+with(sub, hist(Age, breaks = 20, xlab = "Age (years)", main = NA))
+```
+
+## Multivariate descriptives
+
+### Categorical x Categorical
+
+```{r}
+tab <- with(dat, table(Gender, Belgian, exclude = NULL))
+tab
+```
+
+```{r}
+prop.table(tab)
+```
+
+```{r}
+round(prop.table(tab), digits = 1)
+```
+
+```{r}
+barplot(tab)    # stacked => not very nice/insightful!
+```
+
+```{r}
+barplot(tab, beside = TRUE)    # use beside argument!
+```
+
+```{r}
+barplot(tab, beside = TRUE, legend.text = levels(dat$Gender),
+        xlab = "Nationality", xaxt = "n")    # Necessary to also have a legend!
+axis(1, at = c(2, 6.5, 10.5), labels = c("Belgian", "Other", "NA"))
+```
+
+```{r}
+?par    # look up 'xaxt'
+```
+
+```{r}
+?axis
+```
+
+If you want to put `Gender` on the x-axis, then you can just take the transpose of the table (matrix):
+
+```{r}
+?t
+```
+
+```{r}
+with(dat, table(Belgian, Gender, exclude = NULL))    # either switch arguments
+```
+
+```{r}
+t(tab)    # or take transpose
+```
+
+```{r}
+barplot(t(tab), beside = TRUE, legend.text = levels(dat$Belgian),
+        xlab = "Gender")
+```
+
+In **ggplot2** you put a variable on the x-axis by means of the aesthetics, but you first have convert the frequency table to a data frame (or tibble). The count variable in this data frame needs to be incorporated in the (mapping to) aesthetics but this also means that you have to use the `identity` stat (instead of the default `count` stat). Bar charts in **ggplot2** are also stacked by default so you plot the bars side-by-side with the argument `position = "dodge"`:
+
+```{r, paged.print = FALSE}
+df2 <- as.data.frame(tab)
+df2
+```
+
+```{r}
+ggplot(data = df2, mapping = aes(x = Gender, fill = Belgian, y = Freq)) +
+  geom_bar(stat = "identity", position = "dodge") 
+```
+
+By the way, the data frame `df2` can always be (re)converted to a table by means of the function `pivot_wider()` of (the subpackage **tidyr** of) tidyverse. That function has many arguments but the most important two are:
+
+-   `names_from`: The character column which should become the new columns
+-   `values_from`: The numeric column which contains the values for the cells
+
+```{r, paged.print = FALSE}
+df3 <- df2 %>%
+  pivot_wider(names_from = "Belgian", values_from = "Freq")
+df3
+```
+
+The function `pivot_longer()` performs the opposite operation: it rearranges various columns underneath each other. You should should specify which columns should be rearranged and the arguments `names_to` and `values_to` have the opposite meanings to `names_from` and `values_from` in `pivot_wider()`:
+
+```{r, paged.print = FALSE}
+df4 <- df3 %>%
+  pivot_longer(!Gender, names_to = "Belgian", values_to = "Freq")
+df4
+```
+
+The `pivot_wider()` and `pivot_longer()` functions (of the **tidyr** subpackage) supersede the functions `spread()` and `gather()` (which are in other words deprecated) in tidyverse. Any function of the **reshape2** package is also deprecated.
+
+Another example:
+
+```{r}
+tab <- with(dat, table(Academic_background, Gender, exclude = NULL))
+tab 
+```
+
+```{r}
+prop.table(tab)    # cell percentages
+```
+
+```{r}
+options(digits = 1)    # change number of digits for all subsequent commands
+prop.table(tab)
+```
+
+```{r}
+prop.table(tab, margin = 1)    # row percentages 
+```
+
+```{r}
+prop.table(tab, margin = 2)    # column percentages
+```
+
+### Categorical x Continuous
+
+```{r, paged.print = FALSE}
+with(dat, aggregate(`Time to get here` ~ Gender, FUN = mean))
+```
+
+```{r}
+with(dat, mean(`Time to get here`[Gender == "female"], na.rm = TRUE))
+```
+
+```{r}
+with(dat, mean(`Time to get here`[Gender == "male"], na.rm = TRUE))
+```
+
+```{r}
+?aggregate
+```
+
+```{r, paged.print = FALSE}
+with(dat, aggregate(`Time to get here` ~ Gender, FUN = median))
+```
+
+```{r, paged.print = FALSE}
+with(dat, aggregate(`Time to get here` ~ Gender, FUN = sd))
+```
+
+Base R's `aggregate()` function has a counterpart in combining the `group_by()` function with `summarise()` of (the subpackage **dplyr** of) tidyverse:
+
+```{r, paged.print = FALSE}
+dat %>%
+  group_by(Gender) %>%
+  summarise(avg = mean(`Time to get here`, na.rm = TRUE),
+            med = median(`Time to get here`, na.rm = TRUE),
+            std = sd(`Time to get here`, na.rm = TRUE))
+```
+
+Since `Gender` is coded as a factor, the default bivariate plot with factor on the x-axis will be a (conditional) boxplot:
+
+```{r}
+with(dat, plot(Gender, `Time to get here`))
+```
+
+```{r}
+with(dat, plot(`Time to get here` ~ Gender))
+```
+
+```{r}
+boxplot(`Time to get here` ~ Gender, data = dat)    # will also display a boxplot
+                                                    # if Gender is numerical,
+                                                    # in contrast to 'plot()'!
+```
+
+Is the range in `Age` (and age distribution) about the same for male and female students?
+
+```{r}
+with(sub, boxplot(Age ~ Gender))
+```
+
+```{r}
+boxplot(Age ~ Gender, data = sub)
+```
+
+```{r}
+par(mfrow = c(2, 1))
+with(sub, {
+  hist(Age[Gender == "female"])
+  hist(Age[Gender == "male"])
+  })
+```
+
+```{r}
+par(mfrow = c(1, 1))    # back to default
+```
+
+Special case: the **evolution of a variable** (over time)
+
+```{r}
+with(sub, plot(Birth_date, Gender))
+```
+
+```{r}
+plot(as.numeric(Gender) ~ Birth_date, data = sub)
+```
+
+Add a smoother to gain more insight in `Gender` gap conditional on `Age` category (using **LOWESS** or **LOESS** = LOcally WEighted Scatterplot Smoothing):
+
+```{r}
+# All commands in one go:
+plot(as.numeric(Gender) ~ Birth_date, data = sub)
+with(sub, lines(loess.smooth(Birth_date, as.numeric(Gender)),
+                        col = "red"))
+abline(h = 1.5, lty = 2)
+```
+
+The same, but with clearer `y` labels (requires some tweaking of graphical parameters):
+
+```{r}
+?par    # look up 'yaxt'
+```
+
+```{r}
+plot(as.numeric(Gender) ~ Birth_date, data = sub, yaxt = "n",
+     xlab = "Birth date", ylab = "Gender")
+with(sub, lines(loess.smooth(Birth_date, as.numeric(Gender)),
+                        col = "red"))
+abline(h = 1.5, lty = 2)
+axis(2, at = c(1, 2), labels = levels(sub$Gender), las = 1)
+```
+
+In **ggplot2** the LOESS smoother is available as a geom or stat layer:
+
+```{r}
+ggplot(data = sub,
+       mapping = aes(x = Birth_date, y = as.numeric(Gender))) +
+  geom_point() +
+  geom_smooth(se = FALSE, color = "red") +
+  scale_y_continuous(breaks = c(1, 2), labels = levels(sub$Gender))
+```
+
+### Continuous x Continuous
+
+```{r}
+with(sub, {
+  plot(Birth_date, Age)    # default: scatterplot
+  lines(loess.smooth(Birth_date, Age), 
+        col = "red", lwd = 2)
+})
+```
+
+```{r}
+ggplot(sub, mapping = aes(x = Birth_date, y = Age)) +
+  geom_point() + 
+  geom_smooth(color = "red")
+```
+
+The **correlation coefficient** expresses the (strength of the) relationship between two numeric variables. Pearson's correlation coefficient expresses a linear relationship:
+
+```{r}
+?cor
+```
+
+```{r}
+with(sub, cor(as.numeric(Birth_date), Age, use = "na.or.complete"))
+```
+
+Of course, `Birth_date` and `Age` in fact encode the same information. Another example:
+
+```{r}
+sub <- dat %>% filter(`Distance to class` < 10000)
+with(sub, plot(`Distance to class`, `Time to get here`))
+```
+
+```{r}
+plot(`Time to get here` ~ `Distance to class`, data = sub)
+with(sub, lines(loess.smooth(`Distance to class`, `Time to get here`),
+                col = "red", lwd = 2))
+```
+
+```{r}
+with(sub, cor(`Distance to class`, `Time to get here`, use = "na.or.complete"))
+```
+
+Is this correlation as expected?
+
+### Continuous x Continuous x Categorical
+
+By adding a color code to the previous scatter plot, we can also identify a categorical variable, e.g. means of transportation:
+
+```{r}
+plot(`Time to get here` ~ `Distance to class`, data = sub, 
+     col = sub$Means_of_transportation, pch = 19)
+legend(x = "topleft", col = 1:3,
+       legend = levels(sub$Means_of_transportation),
+       cex = 0.9, pch = 19)
+```
+
+Look at the order of the levels in order to know the right color code. For instance, `levels(sub$Means_of_transportation)` returns:
+
+```         
+# [1] "bike"             "car / motorbike"  "public transport"
+```
+
+Hence, color `1` = `"bike"`, `2` = `"car / motorbike"` and so on.
+
+In **ggplot2** a third variable can be visualized by mapping it to a certain aesthetic like e.g. `color`:
+
+```{r}
+ggplot(data = sub,
+       mapping = aes(x = `Distance to class`,
+                     y = `Time to get here`,
+                     color = Means_of_transportation)) + 
+  geom_point()
+```
+
+Add LOESS smoothers for each of the means of transportation:
+
+```{r}
+# All code in one go:
+plot(`Time to get here` ~ `Distance to class`, data = sub, 
+     col = sub$Means_of_transportation, pch = 19)
+legend(x = "topleft", col = 1:3,
+       legend = levels(sub$Means_of_transportation), pch = 19)
+with(subset(sub, Means_of_transportation == "bike"),
+     lines(loess.smooth(`Distance to class`, `Time to get here`),
+           col = 1, lwd = 2))
+with(subset(sub, Means_of_transportation == "car / motorbike"),
+     lines(loess.smooth(`Distance to class`, `Time to get here`),
+           col = 2, lwd = 2))
+with(subset(sub, Means_of_transportation == "public transport"),
+     lines(loess.smooth(`Distance to class`, `Time to get here`),
+           col = 3, lwd = 2))
+```
+
+Beware of extrapolation to undersampled regions!
+
+Add regression lines instead of LOESS smoothers: use `abline()`. This in turn makes use of the function `lm()`, which stands for "linear model", since we basically plot the regression line for each linear model in which we regress time on distance, separately for the different means of transportation:
+
+```{r}
+?abline
+```
+
+```{r}
+plot(Time.to.get.here ~ Distance.to.class, data = sub,
+     col = sub$Means.of.transportation, pch = 19)
+legend(x = "topleft", col = 1:3,
+       legend = levels(sub$Means.of.transportation), pch = 19)
+with(subset(sub, Means.of.transportation == "bike"),
+     abline(lm(Time.to.get.here ~ Distance.to.class), col = 1))
+with(subset(sub, Means.of.transportation == "car / motorbike"),
+     abline(lm(Time.to.get.here ~ Distance.to.class), col = 2))
+with(subset(sub, Means.of.transportation == "public transport"),
+     abline(lm(Time.to.get.here ~ Distance.to.class), col = 3))
+```
+
+What information does this reveal?
+
+### Continuous x Continuous x Continuous
+
+As an example, let's add Age instead of means of transportation as the third variable. Instead of color coding, we can vary the size of the circles according to `Age` (larger circles = older students). This is called a **bubble plot**:
+
+```{r}
+plot(`Time to get here` ~ `Distance to class`, data = sub, pch = "")
+with(subset(sub, !is.na(Age)),
+     symbols(`Distance to class`, `Time to get here`, circles = Age,
+             inches = 0.1, add = TRUE))
+```
+
+In **ggplot2**, bubble plots can be made with the `size` aesthetic (while the `alpha` argument controls the degree of transparency of the colors):
+
+```{r}
+ggplot(data = sub,
+       mapping = aes(x = `Distance to class`,
+                     y = `Time to get here`,
+                     size = Age)) + 
+  geom_point(alpha = 0.3)
+```
+
+It is clear that bubble plots are not always very insightful, however: people cannot think in many dimensions at once!
